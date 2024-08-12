@@ -1,0 +1,49 @@
+image: node:21.6.0-alpine3.19
+
+definitions:
+  services:
+    docker:
+      memory: 7128
+
+pipelines:
+  branches:
+    master:
+      - step:
+          name: Build the client portal service
+          size: 2x
+          services:
+            - docker
+          script:
+            - echo "Building from branch -> ${BITBUCKET_BRANCH}"
+            - docker build -f Dockerfile --tag zanibal/mywealth-client-portal:latest .
+            - echo "Pushing image to the docker repository"
+            - docker login -u $DOCKER_HUB_USER -p $DOCKER_HUB_PASSWORD
+            - docker image push zanibal/mywealth-client-portal:latest
+    v*:
+      - step:
+          name: Build the client portal service
+          size: 2x
+          services:
+            - docker
+          script:
+            - echo "Building from branch -> ${BITBUCKET_BRANCH}"
+            - docker build -f Dockerfile --tag zanibal/mywealth-client-portal:${BITBUCKET_BRANCH} .
+            - echo "Pushing image to the docker repository"
+            - docker login -u $DOCKER_HUB_USER -p $DOCKER_HUB_PASSWORD
+            - docker image push zanibal/mywealth-client-portal:${BITBUCKET_BRANCH}
+
+  tags:
+    v*:
+      - step:
+          name: Build the client portal service
+          size: 2x
+          services:
+            - docker
+          caches:
+            - node
+          script:
+            - echo "Beginning release build for MyWealth client portal from tag ${BITBUCKET_TAG}"
+            - docker build -f Dockerfile --tag zanibal/mywealth-client-portal:$BITBUCKET_TAG .
+            - echo "Push image to the docker repository"
+            - docker login -u $DOCKER_HUB_USER -p $DOCKER_HUB_PASSWORD
+            - docker image push zanibal/mywealth-client-portal:$BITBUCKET_TAG

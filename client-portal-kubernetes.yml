@@ -1,0 +1,196 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
+    meta.helm.sh/release-name: mywealth
+  labels:
+    app.kubernetes.io/name: mywealth
+  name: client-portal-secret
+type: Opaque
+
+stringData:
+  NEXTAUTH_SECRET: u43hGcyytgPDkcb2nXt6fjnGwFH4TRjsnXB3RcbArQ0=
+  KEYCLOAK_CLIENT_SECRET: 0gYrW91TTNG275PxCPS3E8QfodCxWWBf
+  DATABASE_URL: postgresql://zanibal:ZMeGLtVpoDsHuMBci3aLxV@postgresql-primary.postgresql-mywealth.svc.cluster.local:5432/client_portal?schema=public
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    meta.helm.sh/release-name: mywealth
+  labels:
+    app.kubernetes.io/name: mywealth
+  name: client-portal-configmap
+data:
+  # Next Auth
+  NEXTAUTH_URL: https://clientportal.mywealthcare.io
+  
+  # Keycloak
+  KEYCLOAK_CLIENT_ID: clientportal
+  KEYCLOAK_REALM: mywealth
+  KEYCLOAK_BASE_URL: https://oidc.mywealthcare.io
+
+  # Core services
+  ACCOUNTING_SERVICE_URL: http://accounting.accounting.svc.cluster.local:80
+  REPORTS_SERVICE_URL: http://reports.reports.svc.cluster.local:80
+  BANKING_SERVICE_URL: http://banking.banking.svc.cluster.local:80
+  CRM_SERVICE_URL: http://crm.crm.svc.cluster.local:80
+ 
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: client-portal
+    app.kubernetes.io/version: latest
+  name: client-portal
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+  selector:
+    app.kubernetes.io/name: client-portal
+    app.kubernetes.io/instance: client-portal
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/version: latest
+    app.kubernetes.io/name: client-portal
+  name: client-portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: client-portal
+      app.kubernetes.io/name: client-portal
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: client-portal
+        app.kubernetes.io/name: client-portal
+    spec:
+      containers:
+        - env:
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+            - name: ENCRYPTED_CARD_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: ENCRYPTED_CARD_SECRET
+                  name: client-portal-secret
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: KEYCLOAK_CLIENT_SECRET
+                  name: client-portal-secret
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  key: DATABASE_URL
+                  name: client-portal-secret
+
+            - name: NEXTAUTH_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: NEXTAUTH_URL
+                  name: client-portal-configmap
+            - name: KEYCLOAK_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  key: KEYCLOAK_CLIENT_ID
+                  name: client-portal-configmap
+            - name: KEYCLOAK_REALM
+              valueFrom:
+                configMapKeyRef:
+                  key: KEYCLOAK_REALM
+                  name: client-portal-configmap
+            - name: KEYCLOAK_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: KEYCLOAK_BASE_URL
+                  name: client-portal-configmap
+            - name: ACCOUNTING_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: ACCOUNTING_SERVICE_URL
+                  name: client-portal-configmap
+            - name: REPORTS_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: REPORTS_SERVICE_URL
+                  name: client-portal-configmap
+            - name: BANKING_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: BANKING_SERVICE_URL
+                  name: client-portal-configmap
+            - name: CRM_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: CRM_SERVICE_URL
+                  name: client-portal-configmap
+            
+          image: zanibal/client-portal:latest
+          name: client-portal
+          imagePullPolicy: Always
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health/liveness
+              port: 3000
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 1042Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+    nginx.ingress.kubernetes.io/hsts: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "1000"
+    nginx.ingress.kubernetes.io/proxy-body-size: 100m
+    nginx.ingress.kubernetes.io/proxy-buffer-size: 256k
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-max-temp-file-size: 1024m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+  labels:
+    app.kubernetes.io/name: client-portal
+  name: client-portal
+spec:
+  rules:
+    - host: clientportal.mywealthcare.io
+      http:
+        paths:
+          - backend:
+              service:
+                name: client-portal
+                port:
+                  name: http
+            path: /
+            pathType: Prefix

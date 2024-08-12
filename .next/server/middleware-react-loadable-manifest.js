@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST="{\"pages/auth/signup/index.tsx -> ./page\":{\"id\":\"pages/auth/signup/index.tsx -> ./page\",\"files\":[\"static/chunks/src_pages_auth_signup_page_tsx.js\"]}}"
